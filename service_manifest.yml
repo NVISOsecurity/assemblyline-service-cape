@@ -1,0 +1,37 @@
+name: Cape
+version: $SERVICE_TAG
+description: Submit the file to be dynamically analyzed via a Cape instance
+
+accepts: .*
+rejects: empty|metadata/.*
+
+stage: CORE
+category: External
+
+file_required: true
+timeout: 300
+disable_cache: false
+
+enabled: false
+is_external: true
+licence_count: 0
+
+submission_params:
+  - default: ""
+    name: url
+    type: str
+    value: ""
+  - default: ""
+    name: username
+    type: str
+    value: ""
+  - default: ""
+    name: password
+    type: str
+    value: ""
+
+docker_config:
+  image: x1mus/assemblyline-service-cape:$SERVICE_TAG
+  cpu_cores: 1
+  ram_mb: 256
+  allow_internet_access: true
