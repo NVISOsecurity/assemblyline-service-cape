@@ -6,22 +6,28 @@ from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FO
 
 
 class CapeClientV1():
-	def __init__(self, url="", username="", password=""):
-		self.url = url
-		self.auth = HTTPBasicAuth(username, password)
-
-	"""def auth(self):
-		# Used for APIv2
-		r = requests.post(self.url + "/apiv2/api-token-auth/", data={"username": "<username>", "password": "<password>"})
-		self.headers = {"Authorization": "Token " + r.json()["token"]}
-	"""
+	def __init__(self, host="", username="", password="", version=1):
+		self.host = host
+		self.version = version
+		
+		if version == 1:
+			self.auth = HTTPBasicAuth(username, password)
+			self.api_version = "/api"
+		elif version == 2:
+			r = requests.post(self.host + "/apiv2/api-token-auth/", data={"username": username, "password": password})
+			self.headers = {"Authorization": "Token " + r.json()["token"]}
+			self.api_version = "/apiv2"
 
 	def sha256_check(self, sha256):
 		"""Check in CAPE if an analysis already exist for the corresponding sha256
 			- If an analysis already exist, we set the ID of the analysis and return true
 			- If not, we just return false
 		"""
-		r = requests.get(self.url + "/api/tasks/search/sha256/" + sha256 + "/", auth=self.auth)
+		if self.version == 1:
+			r = requests.get(self.host + self.api_version + "/tasks/search/sha256/" + sha256 + "/", auth=self.auth)
+		else:
+			r = requests.get(self.host + self.api_version + "/tasks/search/sha256/" + sha256 + "/", headers=self.headers)
+
 		if r.json()["data"]:
 			self.id = r.json()["data"][0]["id"]
 			return True
@@ -34,19 +40,27 @@ class CapeClientV1():
 		"""
 		with open(filename, "rb") as f:
 			file = {"file": (str(filename), f)}
-			r = requests.post(self.url + "/api/tasks/create/file/", files=file, auth=self.auth)
+			if self.version == 1:
+				r = requests.post(self.host + self.api_version + "/tasks/create/file/", files=file, auth=self.auth)
+			else:
+				r = requests.post(self.host + self.api_version + "/tasks/create/file/", files=file, headers=self.headers)
 		self.id = r.json()["data"]["task_ids"][0]
 
 	def check_status(self):
 		"""As long as the report status is different from "reported" and "failed_processing", we just wait.
 		After having a result (or a failed result), we return true if the analysis is successful !
 		"""
-		r = requests.get(self.url + "/api/tasks/status/" + str(self.id) + "/", auth=self.auth)
-		print("Error ?", r.json()["error"], "- Value :", r.json()["data"])
+		if self.version == 1:
+			r = requests.get(self.host + self.api_version + "/tasks/status/" + str(self.id) + "/", auth=self.auth)
+		else:
+			r = requests.get(self.host + self.api_version + "/tasks/status/" + str(self.id) + "/", headers=self.headers)
 
 		while r.json()["data"] != "reported" and r.json()["data"] != "failed_processing" and not r.json()["error"]:
 			time.sleep(5)
-			r = requests.get(self.url + "/api/tasks/status/" + str(self.id) + "/", auth=self.auth)
+			if self.version == 1:
+				r = requests.get(self.host + self.api_version + "/tasks/status/" + str(self.id) + "/", auth=self.auth)
+			else:
+				r = requests.get(self.host + self.api_version + "/tasks/status/" + str(self.id) + "/", headers=self.headers)
 
 		if r.json()["data"] == "reported" and not r.json()["error"]:
 			return True
@@ -56,7 +70,11 @@ class CapeClientV1():
 	def get_report(self):
 		"""Takes an id and get the report of the corresponding analysis
 		"""
-		r = requests.get(self.url + "/api/tasks/get/report/" + str(self.id) + "/json/", auth=self.auth)
+		if self.version == 1:
+			r = requests.get(self.host + self.api_version + "/tasks/get/report/" + str(self.id) + "/json/", auth=self.auth)
+		else:
+			r = requests.get(self.host + self.api_version + "/tasks/get/report/" + str(self.id) + "/json/", headers=self.headers)
+
 		return r.json()
 
 class Cape(ServiceBase):
@@ -83,12 +101,13 @@ class Cape(ServiceBase):
 		result = Result()
 		sha256 = request.sha256
 		file = request.file_path
-		url = request.get_param("url")
+		host = request.get_param("host")
 		username = request.get_param("username")
 		password = request.get_param("password")
+		version = request.get_param("version")
 		report = None
 
-		client = CapeClientV1(url=url, username=username, password=password)
+		client = CapeClientV1(host=host, username=username, password=password, version=version)
 
 		already_exist = client.sha256_check(sha256)
 		# If the file has already been analyzed, we can get the report instantly
