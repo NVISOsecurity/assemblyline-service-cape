@@ -16,9 +16,21 @@ enabled: false
 is_external: true
 licence_count: 0
 
+heuristics:
+  - heur_id: 1
+    name: Cape consider this file as very suspicious
+    score: 500
+    filetype: .*
+    description: Cape consider this file as very suspicious
+  - heur_id: 2
+    name: Cape consider this file as a malware
+    score: 1000
+    filetype: .*
+    description: Cape consider this file as a malware
+
 submission_params:
   - default: ""
-    name: url
+    name: host
     type: str
     value: ""
   - default: ""
@@ -29,6 +41,10 @@ submission_params:
     name: password
     type: str
     value: ""
+  - default: 1
+    name: version
+    type: int
+    value: 1
 
 docker_config:
   image: x1mus/assemblyline-service-cape:$SERVICE_TAG
