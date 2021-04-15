@@ -30,8 +30,10 @@ class CapeClientV1():
 
 		if r.json()["data"]:
 			self.id = r.json()["data"][0]["id"]
+			print("SHA256 OK")
 			return True
 		else:
+			print("SHA256 NOK")
 			return False
 
 	def submit(self, filename):
@@ -56,6 +58,7 @@ class CapeClientV1():
 			r = requests.get(self.host + self.api_version + "/tasks/status/" + str(self.id) + "/", headers=self.headers)
 
 		while r.json()["data"] != "reported" and r.json()["data"] != "failed_processing" and not r.json()["error"]:
+			print("Error ?", r.json()["error"], "- Value :", r.json()["data"])
 			time.sleep(5)
 			if self.version == 1:
 				r = requests.get(self.host + self.api_version + "/tasks/status/" + str(self.id) + "/", auth=self.auth)
@@ -71,8 +74,10 @@ class CapeClientV1():
 		"""Takes an id and get the report of the corresponding analysis
 		"""
 		if self.version == 1:
+			print("GET REPORT V1")
 			r = requests.get(self.host + self.api_version + "/tasks/get/report/" + str(self.id) + "/json/", auth=self.auth)
 		else:
+			print("GET REPORT V2")
 			r = requests.get(self.host + self.api_version + "/tasks/get/report/" + str(self.id) + "/json/", headers=self.headers)
 
 		return r.json()
@@ -99,6 +104,7 @@ class Cape(ServiceBase):
 
 	def execute(self, request):
 		result = Result()
+		print("START")
 		sha256 = request.sha256
 		file = request.file_path
 		host = request.get_param("host")
@@ -108,17 +114,21 @@ class Cape(ServiceBase):
 		report = None
 
 		client = CapeClientV1(host=host, username=username, password=password, version=version)
+		print("CLIENT CREATED")
 
 		already_exist = client.sha256_check(sha256)
 		# If the file has already been analyzed, we can get the report instantly
 		if already_exist:
+			print("ALREADY EXIST")
 			report = client.get_report()
 		# If not, we submit the file for dynamic analysis to CAPE sandbox
 		else:
+			print("SUBMITTING")
 			client.submit(file)
 			if client.check_status():
 				report = client.get_report()
 
+		print("PARSING")
 		if report:
 			# We pop each part of the report
 			report_statistics = report.pop("statistics")
@@ -162,6 +172,7 @@ class Cape(ServiceBase):
 			ResultSection("Machine info", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_info_machine), parent=info_kv_section)
 
 			# Behavior parsing
+			""" KEY_VALUE
 			report_behavior_processes = report_behavior.pop("processes")
 			report_behavior_anomaly = report_behavior.pop("anomaly")
 			report_behavior_processtree = report_behavior.pop("processtree")
@@ -173,12 +184,12 @@ class Cape(ServiceBase):
 				report_behavior_processes_calls = process.pop("calls")
 				report_behavior_processes_threads = process.pop("threads")
 				report_behavior_processes_environ = process.pop("environ")
-				report_behavior_processes_kv_section = ResultSection("Behavior process " + str(process["process_id"], body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(process), parent=main_kv_section))
+				report_behavior_processes_kv_section = ResultSection("Behavior process " + str(process["process_id"]), body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(process), parent=main_kv_section)
 				i = 0
-				for call in report_behavior_processes_calls_arguments:
+				for call in report_behavior_processes_calls:
 					report_behavior_processes_calls_arguments = call.pop("arguments")
 					report_behavior_processes_calls_kv_section = ResultSection("Call " + str(i), body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(call), parent=report_behavior_processes_kv_section)
-					self.parse_list_of_dict("Argument", report_behavior_processes_calls_arguments, report_behavior_processes_calls_kv_sectio)
+					self.parse_list_of_dict("Argument", report_behavior_processes_calls_arguments, report_behavior_processes_calls_kv_section)
 					i += 1
 				ResultSection("Threads", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_processes_threads), parent=report_behavior_processes_kv_section)
 				ResultSection("Environ", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_processes_environ), parent=report_behavior_processes_kv_section)
@@ -201,6 +212,8 @@ class Cape(ServiceBase):
 				i += 1
 
 			ResultSection("Encryptedbuffers", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_encryptedbuffers), parent=main_kv_section)
+			"""
+			ResultSection("Behavior", body_format=BODY_FORMAT.JSON, body=json.dumps(report_behavior), parent=main_kv_section)
 
 			# Debug parsing
 			ResultSection("Debug", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_debug), parent=main_kv_section)
@@ -270,11 +283,17 @@ class Cape(ServiceBase):
 			ResultSection("Target analysis", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_target), parent=main_kv_section)
 
 			# VirusTotal parsing
-			report_vt_scans = report_vt.pop("scans")
-			report_vt_results = report_vt.pop("results")
+			try:
+				report_vt_scans = report_vt.pop("scans")
+				report_vt_results = report_vt.pop("results")
+			except KeyError:
+				report_vt_scans = None
+				report_vt_results = None
 			report_vt_kv_section = ResultSection("VirusTotal", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_vt), parent=main_kv_section)
-			self.parse_dict_of_dict("Scans", report_vt_scans, report_vt_kv_section)
-			self.parse_list_of_dict("Results", report_vt_results, report_vt_kv_section)
+			if report_vt_scans:
+				self.parse_dict_of_dict("Scans", report_vt_scans, report_vt_kv_section)
+			if report_vt_results:
+				self.parse_list_of_dict("Results", report_vt_results, report_vt_kv_section)
 
 			# Procmemory parsing
 			ResultSection("Procmemory", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_procmemory), parent=main_kv_section)
