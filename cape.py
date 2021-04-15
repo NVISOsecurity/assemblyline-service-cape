@@ -9,7 +9,7 @@ class CapeClientV1():
 	def __init__(self, host="", username="", password="", version=1):
 		self.host = host
 		self.version = version
-		
+
 		if version == 1:
 			self.auth = HTTPBasicAuth(username, password)
 			self.api_version = "/api"
@@ -143,6 +143,10 @@ class Cape(ServiceBase):
 			report_ttps = report.pop("ttps")
 
 			main_kv_section = ResultSection("Cape analysis report", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report))
+			if report["malscore"] >= 2:
+				main_kv_section.set_heuristic(2)
+			elif report["malscore"] >= 1:
+				main_kv_section.set_heuristic(1)
 
 			# Statistics parsing
 			self.parse_list_of_dict("Statistics processing", report_statistics["processing"], main_kv_section)
@@ -164,14 +168,30 @@ class Cape(ServiceBase):
 			report_behavior_summary = report_behavior.pop("summary")
 			report_behavior_enhanced = report_behavior.pop("enhanced")
 			report_behavior_encryptedbuffers = report_behavior.pop("encryptedbuffers")
-			ResultSection("Behavior process", body_format=BODY_FORMAT.JSON, body=json.dumps(report_behavior_processes), parent=main_kv_section)
+
+			for process in report_behavior_processes:
+				report_behavior_processes_calls = process.pop("calls")
+				report_behavior_processes_threads = process.pop("threads")
+				report_behavior_processes_environ = process.pop("environ")
+				report_behavior_processes_kv_section = ResultSection("Behavior process " + str(process["process_id"], body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(process), parent=main_kv_section))
+				i = 0
+				for call in report_behavior_processes_calls_arguments:
+					report_behavior_processes_calls_arguments = call.pop("arguments")
+					report_behavior_processes_calls_kv_section = ResultSection("Call " + str(i), body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(call), parent=report_behavior_processes_kv_section)
+					self.parse_list_of_dict("Argument", report_behavior_processes_calls_arguments, report_behavior_processes_calls_kv_sectio)
+					i += 1
+				ResultSection("Threads", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_processes_threads), parent=report_behavior_processes_kv_section)
+				ResultSection("Environ", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_processes_environ), parent=report_behavior_processes_kv_section)
+
 			ResultSection("Behavior anomaly", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_anomaly), parent=main_kv_section)
+
 			i = 0
 			for process in report_behavior_processtree:
 				report_behavior_processtree_environ = process.pop("environ")
 				report_behavior_processtree_kv_section = ResultSection("Behavior processtree " + str(i), body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(process), parent=main_kv_section)
 				ResultSection("Environ", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_processtree_environ), parent=report_behavior_processtree_kv_section)
 				i += 1
+
 			ResultSection("Behavior summary", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_summary), parent=main_kv_section)
 			i = 0
 			for e in report_behavior_enhanced:
@@ -179,6 +199,7 @@ class Cape(ServiceBase):
 				report_behavior_enhanced_kv_section = ResultSection("Behavior enhanced " + str(i), body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(e), parent=main_kv_section)
 				ResultSection("Data", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_enhanced_data), parent=report_behavior_enhanced_kv_section)
 				i += 1
+
 			ResultSection("Encryptedbuffers", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_behavior_encryptedbuffers), parent=main_kv_section)
 
 			# Debug parsing
@@ -203,9 +224,40 @@ class Cape(ServiceBase):
 			ResultSection("Procdump", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_procdump), parent=main_kv_section)
 
 			# Static parsing
+			report_static_values = ["pe", "dotnet"]
 			if report_static:
 				for k in report_static:
-					ResultSection("Static " + k, body_format=BODY_FORMAT.JSON, body=json.dumps(report_static[k]), parent=main_kv_section)
+					if k not in report_static_values:
+						ResultSection("Static " + k, body_format=BODY_FORMAT.JSON, body=json.dumps(report_static[k]), parent=main_kv_section)
+					elif k == "pe":
+						report_static_pe_imports = report_static[k].pop("imports")
+						report_static_pe_exports = report_static[k].pop("exports")
+						report_static_pe_dirents = report_static[k].pop("dirents")
+						report_static_pe_sections = report_static[k].pop("sections")
+						report_static_pe_resources = report_static[k].pop("resources")
+						report_static_pe_versioninfo = report_static[k].pop("versioninfo")
+						report_static_pe_digital_signers = report_static[k].pop("digital_signers")
+						report_static_pe_guest_signers = report_static[k].pop("guest_signers")
+						report_static_pe_kv_section = ResultSection("Static" + k, body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_static[k]), parent=main_kv_section)
+						i = 0
+						for dll in report_static_pe_imports:
+							dll_imports = dll.pop("imports")
+							dll_kv_section = ResultSection("DLL " + str(i), body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(dll), parent=report_static_pe_kv_section)
+							self.parse_list_of_dict("Import", dll_imports, dll_kv_section)
+							i += 1
+						ResultSection("Exports", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_static_pe_exports), parent=report_static_pe_kv_section)
+						self.parse_list_of_dict("Dirents", report_static_pe_dirents, parent=report_static_pe_kv_section)
+						self.parse_list_of_dict("Sections", report_static_pe_sections, parent=report_static_pe_kv_section)
+						self.parse_list_of_dict("Resources", report_static_pe_resources, parent=report_static_pe_kv_section)
+						ResultSection("Versioninfo", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_static_pe_versioninfo), parent=report_static_pe_kv_section)
+						ResultSection("Digital signers", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_static_pe_digital_signers), parent=report_static_pe_kv_section)
+						ResultSection("Guest signers", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_static_pe_guest_signers), parent=report_static_pe_kv_section)
+					elif k == "dotnet":
+						self.parse_list_of_dict("Dotnet - typerefs", report_static[k]["typerefs"], main_kv_section)
+						self.parse_list_of_dict("Dotnet - assemblyrefs", report_static[k]["assemblyrefs"], main_kv_section)
+						ResultSection("Dotnet - assemblyinfo", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_static[k]["assemblyinfo"]), parent=main_kv_section)
+						self.parse_list_of_dict("Dotnet - customattrs", report_static[k]["customattrs"], main_kv_section)
+
 
 			# Strings parsing
 			ResultSection("Strings analysis", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_strings), parent=main_kv_section)
