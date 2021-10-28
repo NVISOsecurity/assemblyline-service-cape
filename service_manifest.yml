@@ -47,7 +47,7 @@ submission_params:
     value: 1
 
 docker_config:
-  image: sorakurai/assemblyline-service-cape:$SERVICE_TAG
+  image: ghcr.io/nvisosecurity/assemblyline-service-cape:$SERVICE_TAG
   cpu_cores: 1
   ram_mb: 256
   allow_internet_access: true
