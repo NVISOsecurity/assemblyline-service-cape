@@ -147,7 +147,10 @@ class Cape(ServiceBase):
 			report_strings = report.pop("strings")
 			report_suricata = report.pop("suricata")
 			report_target = report.pop("target")
-			report_vt = report.pop("virustotal")
+			try:
+				report_vt = report.pop("virustotal")
+			except KeyError:
+				report_vt = None
 			report_procmemory = report.pop("procmemory")
 			report_signatures = report.pop("signatures")
 			report_ttps = report.pop("ttps")
