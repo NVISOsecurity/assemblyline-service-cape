@@ -292,7 +292,7 @@ class Cape(ServiceBase):
 			try:
 				report_vt_scans = report_vt.pop("scans")
 				report_vt_results = report_vt.pop("results")
-			except KeyError:
+			except (KeyError, AttributeError):
 				report_vt_scans = None
 				report_vt_results = None
 			report_vt_kv_section = ResultSection("VirusTotal", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_vt), parent=main_kv_section)
