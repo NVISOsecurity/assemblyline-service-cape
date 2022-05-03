@@ -228,13 +228,16 @@ class Cape(ServiceBase):
 			self.parse_list_of_dict("Dropper analysis", report_dropped, main_kv_section)
 
 			# Network parsing
-			report_network_hosts = report_network.pop("hosts")
-			report_network_udp = report_network.pop("udp")
-			report_network_dns = report_network.pop("dns")
-			network_kv_section = ResultSection("Network", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_deduplicated_shots), parent=main_kv_section)
-			self.parse_list_of_dict("Hosts", report_network_hosts, network_kv_section)
-			self.parse_list_of_dict("Udp", report_network_udp, network_kv_section)
-			self.parse_list_of_dict("Dns", report_network_dns, network_kv_section)
+			try:
+				report_network_hosts = report_network.pop("hosts")
+				report_network_udp = report_network.pop("udp")
+				report_network_dns = report_network.pop("dns")
+				network_kv_section = ResultSection("Network", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_deduplicated_shots), parent=main_kv_section)
+				self.parse_list_of_dict("Hosts", report_network_hosts, network_kv_section)
+				self.parse_list_of_dict("Udp", report_network_udp, network_kv_section)
+				self.parse_list_of_dict("Dns", report_network_dns, network_kv_section)
+			except KeyError:
+				report_network_hosts = None
 
 			# Procdump parsing
 			ResultSection("Procdump", body_format=BODY_FORMAT.KEY_VALUE, body=json.dumps(report_procdump), parent=main_kv_section)
